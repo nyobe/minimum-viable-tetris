@@ -1,8 +1,30 @@
 (ns tetris.core)
 
-(def L [[:l nil]
-        [:l nil]
-        [:l :l]])
+(def pieces
+  [[[:i]
+    [:i]
+    [:i]
+    [:i]]
+
+   [[nil :j]
+    [nil :j]
+    [:j  :j]]
+
+   [[:l nil]
+    [:l nil]
+    [:l :l]]
+
+   [[:o :o]
+    [:o :o]]
+
+   [[nil :s :s]
+    [:s :s nil]]
+
+   [[:t :t :t]
+    [nil :t nil]]
+
+   [[:z :z nil]
+    [nil :z :z]]])
 
 (defn print-m [m]
   (dorun (map println m)))
