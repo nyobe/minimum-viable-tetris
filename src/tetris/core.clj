@@ -1,5 +1,9 @@
 (ns tetris.core)
 
+(def L [[:l nil]
+        [:l nil]
+        [:l :l]])
+
 (defn print-m [m]
   (dorun (map println m)))
 
@@ -8,6 +12,15 @@
     (vec (take dimr (repeat empty-row)))))
 
 (def board (atom (empty-board 10 10)))
+
+(defn transpose [m]
+  (apply map vector m))
+
+(defn rotate-ccw [m]
+  (reverse (transpose m)))
+
+(defn rotate-cw [m]
+  (transpose (reverse m)))
 
 (defn submat [mat [row col] [width height]]
   "extract region from matrix"
