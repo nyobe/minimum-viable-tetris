@@ -1,6 +1,11 @@
 (ns tetris.core)
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
+(defn print-m [m]
+  (dorun (map println m)))
+
+(defn empty-board [dimr dimc]
+  (let [empty-row (vec (take dimc (repeat nil)))]
+    (vec (take dimr (repeat empty-row)))))
+
+(def board (atom (empty-board 10 10)))
+
