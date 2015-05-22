@@ -1,5 +1,7 @@
 (ns tetris.core
-  (:import [java.awt Frame Dimension Color]))
+  (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alts!! timeout close!]])
+  (:import [java.awt Frame Dimension Color]
+           [java.awt.event KeyEvent KeyAdapter]))
 
 (def pieces
   [[[:i]
@@ -119,4 +121,34 @@
 
 ;; (.repaint frame)
 ;; (draw-board! gfx (-> @board (mask-m T [3 3]) (mask-m Z [0 1]) (mask-m I [4 2])))
+
+
+;; Core.Async Channels
+
+(defn poll! [c]
+  "read from channel without blocking"
+  (first (alts!! [c] :default nil)))
+
+(defn interval [msecs]
+  "channel that ticks every msecs ms"
+  (let [c (chan)]
+    (go (while (>! c :tick)
+          (<! (timeout t))))
+    c))
+
+
+;; Input
+
+(def input (async/chan (async/sliding-buffer 1)))
+(def keytable {KeyEvent/VK_UP :up
+               KeyEvent/VK_DOWN :down
+               KeyEvent/VK_LEFT :left
+               KeyEvent/VK_RIGHT :right} )
+
+(.addKeyListener frame
+  (proxy
+    [KeyAdapter] []
+    (keyPressed [e]
+      (when-let [k (keytable (.getKeyCode e))]
+        (>!! input k)))))
 
