@@ -74,6 +74,24 @@
           c (range cols)]
       [r c])))
 
+(defn mask-v [base over pos]
+  (let [end (+ pos (count over))]
+    (vec (concat
+           (subvec base 0 pos)
+           (map #(or %1 %2) over (subvec base pos end))
+           (subvec base end)))))
+
+(defn mask-m [base over [row col]]
+  "overlay non-nil values of matrix 'over' onto 'base' at offset [row col]"
+  (let [end (+ row (count over))]
+    (vec (concat
+           (subvec base 0 row)
+           (map mask-v
+                (subvec base row end)
+                over
+                (repeat col))
+           (subvec base end)))))
+
 
 ;; Graphics
 
@@ -98,4 +116,7 @@
       (draw-square! gfx
                     (colors (get-in board coord))
                     size [(* c size) (* r size)]))))
+
+;; (.repaint frame)
+;; (draw-board! gfx (-> @board (mask-m T [3 3]) (mask-m Z [0 1]) (mask-m I [4 2])))
 
