@@ -1,4 +1,5 @@
-(ns tetris.core)
+(ns tetris.core
+  (:import [java.awt Frame Dimension Color]))
 
 (def pieces
   [[[:i]
@@ -25,6 +26,17 @@
 
    [[:z :z nil]
     [nil :z :z]]])
+
+(def colors {:i Color/CYAN
+             :j Color/BLUE
+             :l Color/ORANGE
+             :o Color/YELLOW
+             :s Color/GREEN
+             :t Color/MAGENTA
+             :z Color/RED})
+
+
+;; Matrix functions
 
 (defn print-m [m]
   (dorun (map println m)))
@@ -54,4 +66,36 @@
 
 (defn intersects-m [m1 m2]
   (not-every? nil? (mapcat intersects-v m1 m2)))
+
+(defn coords [m]
+  (let [rows (count m)
+        cols (count (first m))]
+    (for [r (range rows)
+          c (range cols)]
+      [r c])))
+
+
+;; Graphics
+
+(def frame
+  (doto (Frame.)
+    (.setSize (Dimension. 200 200))
+    (.setVisible true)))
+
+(def gfx
+  (doto (.getGraphics frame)
+    (.translate 0 (.. frame getInsets -top))))
+
+(defn draw-square! [gfx color size [x y]]
+  (doto gfx
+    (.setColor color)
+    (.fillRect x y size size)))
+
+(defn draw-board! [gfx board]
+  (let [filled (filter #(get-in board %) (coords board))
+        size 20]
+    (doseq [[r c :as coord] filled]
+      (draw-square! gfx
+                    (colors (get-in board coord))
+                    size [(* c size) (* r size)]))))
 
