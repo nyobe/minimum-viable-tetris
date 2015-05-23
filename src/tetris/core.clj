@@ -1,7 +1,7 @@
 (ns tetris.core
   (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alts!! timeout close!]])
   (:import [java.awt Frame Dimension Color]
-           [java.awt.event KeyEvent KeyAdapter]))
+           [java.awt.event KeyEvent KeyAdapter WindowAdapter]))
 
 (def pieces
   [[[:i]
@@ -99,6 +99,13 @@
 
 (def frame
   (doto (Frame.)
+    ;; Let this window actually close X_X
+    (.addWindowListener
+     (proxy
+      [WindowAdapter] []
+      (windowClosing [e]
+        (.dispose (.getSource e)))))
+
     (.setSize (Dimension. 200 200))
     (.setVisible true)))
 
