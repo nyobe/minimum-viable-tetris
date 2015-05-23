@@ -119,6 +119,7 @@
     (.fillRect x y size size)))
 
 (defn draw-board! [gfx board]
+  (.clearRect gfx 0 0 200 200)
   (let [filled (filter #(get-in board %) (coords board))
         size 20]
     (doseq [[r c :as coord] filled]
@@ -147,10 +148,10 @@
 ;; Input
 
 (def input (async/chan (async/sliding-buffer 1)))
-(def keytable {KeyEvent/VK_UP :up
-               KeyEvent/VK_DOWN :down
-               KeyEvent/VK_LEFT :left
-               KeyEvent/VK_RIGHT :right} )
+(def keytable {KeyEvent/VK_UP    [-1 0]
+               KeyEvent/VK_DOWN  [1 0]
+               KeyEvent/VK_LEFT  [0 -1]
+               KeyEvent/VK_RIGHT [0 1]})
 
 (.addKeyListener frame
   (proxy
@@ -158,4 +159,22 @@
     (keyPressed [e]
       (when-let [k (keytable (.getKeyCode e))]
         (>!! input k)))))
+
+
+;; Game loop
+
+(defn render-loop []
+  (let [running? (interval 250)
+        pos-chan (chan 1)]
+    (>!! pos-chan [5 2])
+    (go (while (<! running?)
+          (if-let [dir (poll! input)]
+            (>! pos-chan (map + dir (<! pos-chan))))
+          (let [pos (<! pos-chan)]
+            (draw-board! gfx (mask-m @board Z pos))
+            (>! pos-chan pos))))
+    running?))
+
+;; (def running (render-loop))
+;; (close! running)
 
