@@ -97,19 +97,19 @@
 
 ;; Graphics
 
-(def frame
+(defn main-window! []
   (doto (Frame.)
     ;; Let this window actually close X_X
     (.addWindowListener
-     (proxy
-      [WindowAdapter] []
-      (windowClosing [e]
-        (.dispose (.getSource e)))))
+      (proxy
+        [WindowAdapter] []
+        (windowClosing [e]
+          (.dispose (.getSource e)))))
 
     (.setSize (Dimension. 200 200))
     (.setVisible true)))
 
-(def gfx
+(defn graphics [frame]
   (doto (.getGraphics frame)
     (.translate 0 (.. frame getInsets -top))))
 
@@ -126,9 +126,6 @@
       (draw-square! gfx
                     (colors (get-in board coord))
                     size [(* c size) (* r size)]))))
-
-;; (.repaint frame)
-;; (draw-board! gfx (-> @board (mask-m T [3 3]) (mask-m Z [0 1]) (mask-m I [4 2])))
 
 
 ;; Core.Async Channels
@@ -147,23 +144,25 @@
 
 ;; Input
 
-(def input (async/chan (async/sliding-buffer 1)))
-(def keytable {KeyEvent/VK_UP    [-1 0]
-               KeyEvent/VK_DOWN  [1 0]
-               KeyEvent/VK_LEFT  [0 -1]
-               KeyEvent/VK_RIGHT [0 1]})
-
-(.addKeyListener frame
-  (proxy
-    [KeyAdapter] []
-    (keyPressed [e]
-      (when-let [k (keytable (.getKeyCode e))]
-        (>!! input k)))))
+(defn attach-keylistener! [frame]
+  (let [input (async/chan (async/sliding-buffer 1))
+        keytable {KeyEvent/VK_UP    [-1 0]
+                  KeyEvent/VK_DOWN  [1 0]
+                  KeyEvent/VK_LEFT  [0 -1]
+                  KeyEvent/VK_RIGHT [0 1]} ]
+    (doto frame
+      (.addKeyListener
+        (proxy
+          [KeyAdapter] []
+          (keyPressed [e]
+            (when-let [k (keytable (.getKeyCode e))]
+              (>!! input k))))))
+    input))
 
 
 ;; Game loop
 
-(defn render-loop []
+(defn render-loop [gfx input]
   (let [running? (interval 250)
         pos-chan (chan 1)]
     (>!! pos-chan [5 2])
@@ -175,6 +174,13 @@
             (>! pos-chan pos))))
     running?))
 
-;; (def running (render-loop))
+(defn -main [& args]
+  (let [frame (main-window!)
+        gfx (graphics frame)
+        input (attach-keylistener! frame)]
+
+    (render-loop gfx input)))
+
+;; (def running (-main))
 ;; (close! running)
 
