@@ -109,9 +109,8 @@
 (defn can-move? [board piece [row col]]
   "check if piece positioned at [row col] will intersect
   or go out of bounds"
-  (let [sub (submat board [row col] [(mat-width piece) (mat-height piece)])]
-    (and
-      (in-bounds? board piece [row col])
+  (when (in-bounds? board piece [row col])
+    (let [sub (submat board [row col] [(mat-width piece) (mat-height piece)])]
       (not (intersects-m? sub piece)))))
 
 
