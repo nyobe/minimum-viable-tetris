@@ -188,18 +188,21 @@
 
 (defn initial-state []
   {:board (empty-board 10 10)
-   :piece (get pieces 3) ;; :o
+   :piece nil
    :pos [0 0]
    :score 0})
 
-(defn fuse-piece [{:keys [board piece pos] :as state}]
+(defn spawn-piece [{:keys [board] :as state}]
   (let [next-piece (rand-nth pieces)
         start-pos [0 (- (/ (mat-width board) 2)
                         (/ (mat-width next-piece) 2))]]
     (assoc state
-           :board (mask-m board piece pos)
            :piece next-piece
            :pos start-pos)))
+
+(defn fuse-piece [{:keys [board piece pos] :as state}]
+  (spawn-piece
+    (assoc state :board (mask-m board piece pos))))
 
 (defn move-piece [{:keys [board piece pos] :as state}
                   offset]
@@ -227,7 +230,7 @@
                     frame {KeyEvent/VK_UP :rotate})
         drop-chan (attach-key-listener!
                     frame {KeyEvent/VK_DOWN :drop})]
-    (go-loop [{:keys [board piece pos] :as state} (initial-state)]
+    (go-loop [{:keys [board piece pos] :as state} (spawn-piece (initial-state))]
       (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan])]
         (draw-board! gfx (mask-m board piece pos))
         (recur
