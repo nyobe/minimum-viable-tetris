@@ -1,5 +1,5 @@
 (ns tetris.core
-  (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alts!! timeout close!]])
+  (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alts! alts!! timeout close!]])
   (:import [java.awt Frame Dimension Color]
            [java.awt.event KeyEvent KeyAdapter WindowAdapter]))
 
@@ -49,6 +49,12 @@
 
 (def board (atom (empty-board 10 10)))
 
+(defn mat-width [m]
+  (count (first m)))
+
+(defn mat-height [m]
+  (count m))
+
 (defn transpose [m]
   (apply map vector m))
 
@@ -63,11 +69,11 @@
   (map #(subvec % col (+ col width))
        (subvec mat row (+ row height))))
 
-(defn intersects-v [v1 v2]
+(defn intersects-v? [v1 v2]
   (map #(and %1 %2) v1 v2))
 
-(defn intersects-m [m1 m2]
-  (not-every? nil? (mapcat intersects-v m1 m2)))
+(defn intersects-m? [m1 m2]
+  (not-every? nil? (mapcat intersects-v? m1 m2)))
 
 (defn coords [m]
   (let [rows (count m)
@@ -94,6 +100,20 @@
                 (repeat col))
            (subvec base end)))))
 
+(defn in-bounds? [board piece [row col]]
+  (let [w (+ col (mat-width piece))
+        h (+ row (mat-height piece))]
+    (and (< -1 col w (mat-width board))
+         (< -1 row h (mat-height board)))))
+
+(defn can-move? [board piece [row col]]
+  "check if piece positioned at [row col] will intersect
+  or go out of bounds"
+  (let [sub (submat board [row col] [(mat-width piece) (mat-height piece)])]
+    (and
+      (in-bounds? board piece [row col])
+      (not (intersects-m? sub piece)))))
+
 
 ;; Graphics
 
@@ -114,9 +134,12 @@
     (.translate 0 (.. frame getInsets -top))))
 
 (defn draw-square! [gfx color size [x y]]
-  (doto gfx
-    (.setColor color)
-    (.fillRect x y size size)))
+  (let [arc (/ size 3)]
+    (doto gfx
+      (.setColor color)
+      (.fillRoundRect x y size size arc arc)
+      (.setColor (.darker color))
+      (.drawRoundRect x y size size arc arc))))
 
 (defn draw-board! [gfx board]
   (.clearRect gfx 0 0 200 200)
@@ -138,18 +161,20 @@
   "channel that ticks every msecs ms"
   (let [c (chan)]
     (go (while (>! c :tick)
-          (<! (timeout t))))
+          (<! (timeout msecs))))
     c))
+
+(defn do-repeatedly [f]
+  (let [running? (interval 250)]
+    (go (while (<! running?)
+          (f)))
+    running?))
 
 
 ;; Input
 
-(defn attach-keylistener! [frame]
-  (let [input (async/chan (async/sliding-buffer 1))
-        keytable {KeyEvent/VK_UP    [-1 0]
-                  KeyEvent/VK_DOWN  [1 0]
-                  KeyEvent/VK_LEFT  [0 -1]
-                  KeyEvent/VK_RIGHT [0 1]} ]
+(defn attach-key-listener! [frame keytable]
+  (let [input (async/chan (async/sliding-buffer 1))]
     (doto frame
       (.addKeyListener
         (proxy
@@ -160,26 +185,65 @@
     input))
 
 
-;; Game loop
+;; Game state
 
-(defn render-loop [gfx input]
-  (let [running? (interval 250)
-        pos-chan (chan 1)]
-    (>!! pos-chan [5 2])
-    (go (while (<! running?)
-          (if-let [dir (poll! input)]
-            (>! pos-chan (map + dir (<! pos-chan))))
-          (let [pos (<! pos-chan)]
-            (draw-board! gfx (mask-m @board Z pos))
-            (>! pos-chan pos))))
-    running?))
+(defn initial-state []
+  {:board (empty-board 10 10)
+   :piece (get pieces 3) ;; :o
+   :pos [0 0]
+   :score 0})
+
+(defn fuse-piece [{:keys [board piece pos] :as state}]
+  (let [next-piece (rand-nth pieces)
+        start-pos [0 (- (/ (mat-width board) 2)
+                        (/ (mat-width next-piece) 2))]]
+    (assoc state
+           :board (mask-m board piece pos)
+           :piece next-piece
+           :pos start-pos)))
+
+(defn move-piece [{:keys [board piece pos] :as state}
+                  offset]
+  (let [next-pos (map + pos offset)]
+    (when (can-move? board piece pos)
+      (assoc state :pos next-pos))))
+
+(defn drop-piece [{:keys [board piece pos] :as state}]
+  (let [downward (for [down (range)]
+                   (move-piece state [down 0]))]
+    (fuse-piece (last (take-while some? downward)))))
+
+(defn rotate-piece [{:keys [board piece pos] :as state}]
+  (let [rotated (rotate-ccw piece)]
+    (when (can-move? board rotated pos)
+      (assoc state :piece rotated))))
+
+(defn game-loop [frame]
+  (let [gfx       (graphics frame)
+        tick-chan (interval 1000)
+        move-chan (attach-key-listener!
+                    frame {KeyEvent/VK_LEFT [0 -1]
+                           KeyEvent/VK_RIGHT [0 1]})
+        rot-chan  (attach-key-listener!
+                    frame {KeyEvent/VK_UP :rotate})
+        drop-chan (attach-key-listener!
+                    frame {KeyEvent/VK_DOWN :drop})]
+    (go-loop [{:keys [board piece pos] :as state} (initial-state)]
+      (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan])]
+        (draw-board! gfx (mask-m board piece pos))
+        (recur
+          (or (condp = ch
+                move-chan (move-piece state value)
+                rot-chan  (rotate-piece state)
+                drop-chan (drop-piece state)
+                tick-chan (or (move-piece state [1 0])
+                              (fuse-piece state)))
+              state))))))
+
 
 (defn -main [& args]
-  (let [frame (main-window!)
-        gfx (graphics frame)
-        input (attach-keylistener! frame)]
-
-    (render-loop gfx input)))
+  (let [frame (main-window!)]
+    (game-loop frame)))
 
 ;; (def running (-main))
 ;; (close! running)
