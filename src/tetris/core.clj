@@ -147,9 +147,10 @@
 (defn board-panel [state]
   (proxy [JPanel] []
     (paintComponent [g]
-      (let [{:keys [board piece pos]} @state]
+      (let [{:keys [board piece pos score]} @state]
         (proxy-super paintComponent g)
-        (draw-board! g (mask-m board piece pos))))
+        (draw-board! g (mask-m board piece pos))
+        (.drawString g (str "score: " score) 10 10)))
     (getPreferredSize []
       (let [{:keys [board]} @state]
         (Dimension. (* (mat-width board) square-size)
@@ -215,7 +216,9 @@
           shifted-board (vec (concat
                                (empty-board lines-dropped (mat-width board))
                                stripped-board))]
-      (assoc state :board shifted-board))))
+      (assoc state
+             :board shifted-board
+             :score (+ score lines-dropped)))))
 
 (defn fuse-piece [{:keys [board piece pos] :as state}]
   (-> state
