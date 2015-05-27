@@ -1,6 +1,7 @@
 (ns tetris.core
   (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alts! alts!! timeout close!]])
-  (:import [java.awt Frame Dimension Color]
+  (:import [java.awt Dimension Color]
+           [javax.swing JPanel JFrame] ;; swing is double buffered!
            [java.awt.event KeyEvent KeyAdapter WindowAdapter]))
 
 (def pieces
@@ -116,21 +117,16 @@
 
 ;; Graphics
 
+(def square-size 20)
+
 (defn main-window! []
-  (doto (Frame.)
+  (doto (JFrame. "Tetris!")
     ;; Let this window actually close X_X
     (.addWindowListener
       (proxy
         [WindowAdapter] []
         (windowClosing [e]
-          (.dispose (.getSource e)))))
-
-    (.setSize (Dimension. 200 200))
-    (.setVisible true)))
-
-(defn graphics [frame]
-  (doto (.getGraphics frame)
-    (.translate 0 (.. frame getInsets -top))))
+          (.dispose (.getSource e)))))))
 
 (defn draw-square! [gfx color size [x y]]
   (let [arc (/ size 3)]
@@ -141,13 +137,23 @@
       (.drawRoundRect x y size size arc arc))))
 
 (defn draw-board! [gfx board]
-  (.clearRect gfx 0 0 200 200)
   (let [filled (filter #(get-in board %) (coords board))
-        size 20]
+        size square-size]
     (doseq [[r c :as coord] filled]
       (draw-square! gfx
                     (colors (get-in board coord))
                     size [(* c size) (* r size)]))))
+
+(defn board-panel [state]
+  (proxy [JPanel] []
+    (paintComponent [g]
+      (let [{:keys [board piece pos]} @state]
+        (proxy-super paintComponent g)
+        (draw-board! g (mask-m board piece pos))))
+    (getPreferredSize []
+      (let [{:keys [board]} @state]
+        (Dimension. (* (mat-width board) square-size)
+                    (* (mat-height board) square-size))))))
 
 
 ;; Core.Async Channels
@@ -220,16 +226,8 @@
     (when (can-move? board rotated pos)
       (assoc state :piece rotated))))
 
-;; (defn render-loop [gfx state-chan]
-;;   (go-loop [{:keys [board piece pos :as state]} (<! state-chan)]
-;;            (when state
-;;              (draw-board! gfx (mask-m board piece pos))
-;;              (recur (<! state-chan)))))
-
-(defn game-loop [frame]
-  (let [gfx       (graphics frame)
-        ;; update-render (render-loop gfx)
-        tick-chan (interval 1000)
+(defn game-loop [frame state]
+  (let [tick-chan (interval 1000)
         move-chan (attach-key-listener!
                     frame {KeyEvent/VK_LEFT [0 -1]
                            KeyEvent/VK_RIGHT [0 1]})
@@ -237,24 +235,29 @@
                     frame {KeyEvent/VK_UP :rotate})
         drop-chan (attach-key-listener!
                     frame {KeyEvent/VK_DOWN :drop})]
-    (go-loop [{:keys [board piece pos] :as state} (spawn-piece (initial-state))]
-             (draw-board! gfx (mask-m board piece pos))
-             ;; (>! update-render state)
+    (go-loop [{:keys [board piece pos]} @state]
+             (.repaint frame)
              (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan] :priority true)]
                (recur
-                 (or (condp = ch
-                       move-chan (move-piece state value)
-                       rot-chan  (rotate-piece state)
-                       drop-chan (drop-piece state)
-                       tick-chan (or (move-piece state [1 0])
-                                     (fuse-piece state)))
-                     state))))))
+                 (reset! state
+                   (or (condp = ch
+                         move-chan (move-piece @state value)
+                         rot-chan  (rotate-piece @state)
+                         drop-chan (drop-piece @state)
+                         tick-chan (or (move-piece @state [1 0])
+                                       (fuse-piece @state)))
+                       @state)))))))
 
+(defn new-game []
+  (let [state (atom (spawn-piece (initial-state)))
+        frame (main-window!)
+        panel (board-panel state)]
+    (doto frame
+      (.add panel)
+      (.pack)
+      (.setVisible true))
+    (game-loop frame state)))
 
 (defn -main [& args]
-  (let [frame (main-window!)]
-    (game-loop frame)))
-
-;; (def running (-main))
-;; (close! running)
+  (new-game))
 
