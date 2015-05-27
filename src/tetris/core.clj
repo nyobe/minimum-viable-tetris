@@ -206,9 +206,22 @@
            :piece next-piece
            :pos start-pos)))
 
+(defn clear-lines [{:keys [board score] :as state}]
+  ;; check each row to see if its filled
+  (letfn [(filled? [v]
+            (not-any? nil? v))]
+    (let [stripped-board (remove filled? board)
+          lines-dropped (- (mat-height board) (mat-height stripped-board))
+          shifted-board (vec (concat
+                               (empty-board lines-dropped (mat-width board))
+                               stripped-board))]
+      (assoc state :board shifted-board))))
+
 (defn fuse-piece [{:keys [board piece pos] :as state}]
-  (spawn-piece
-    (assoc state :board (mask-m board piece pos))))
+  (-> state
+      (assoc :board (mask-m board piece pos))
+      (clear-lines)
+      (spawn-piece)))
 
 (defn move-piece [{:keys [board piece pos] :as state}
                   offset]
