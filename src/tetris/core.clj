@@ -104,8 +104,8 @@
 (defn in-bounds? [board piece [row col]]
   (let [w (+ col (mat-width piece))
         h (+ row (mat-height piece))]
-    (and (< -1 col w (mat-width board))
-         (< -1 row h (mat-height board)))))
+    (and (< -1 col w (inc (mat-width board)))
+         (< -1 row h (inc (mat-height board))))))
 
 (defn can-move? [board piece [row col]]
   "check if piece positioned at [row col] will intersect
