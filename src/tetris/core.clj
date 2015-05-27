@@ -200,8 +200,8 @@
 
 (defn spawn-piece [{:keys [board] :as state}]
   (let [next-piece (rand-nth pieces)
-        start-pos [0 (- (/ (mat-width board) 2)
-                        (/ (mat-width next-piece) 2))]]
+        start-pos [0 (- (quot (mat-width board) 2)
+                        (quot (mat-width next-piece) 2))]]
     (assoc state
            :piece next-piece
            :pos start-pos)))
