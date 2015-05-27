@@ -216,12 +216,19 @@
     (fuse-piece (last (take-while some? downward)))))
 
 (defn rotate-piece [{:keys [board piece pos] :as state}]
-  (let [rotated (rotate-ccw piece)]
+  (let [rotated (rotate-cw piece)]
     (when (can-move? board rotated pos)
       (assoc state :piece rotated))))
 
+;; (defn render-loop [gfx state-chan]
+;;   (go-loop [{:keys [board piece pos :as state]} (<! state-chan)]
+;;            (when state
+;;              (draw-board! gfx (mask-m board piece pos))
+;;              (recur (<! state-chan)))))
+
 (defn game-loop [frame]
   (let [gfx       (graphics frame)
+        ;; update-render (render-loop gfx)
         tick-chan (interval 1000)
         move-chan (attach-key-listener!
                     frame {KeyEvent/VK_LEFT [0 -1]
@@ -231,16 +238,17 @@
         drop-chan (attach-key-listener!
                     frame {KeyEvent/VK_DOWN :drop})]
     (go-loop [{:keys [board piece pos] :as state} (spawn-piece (initial-state))]
-      (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan])]
-        (draw-board! gfx (mask-m board piece pos))
-        (recur
-          (or (condp = ch
-                move-chan (move-piece state value)
-                rot-chan  (rotate-piece state)
-                drop-chan (drop-piece state)
-                tick-chan (or (move-piece state [1 0])
-                              (fuse-piece state)))
-              state))))))
+             (draw-board! gfx (mask-m board piece pos))
+             ;; (>! update-render state)
+             (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan] :priority true)]
+               (recur
+                 (or (condp = ch
+                       move-chan (move-piece state value)
+                       rot-chan  (rotate-piece state)
+                       drop-chan (drop-piece state)
+                       tick-chan (or (move-piece state [1 0])
+                                     (fuse-piece state)))
+                     state))))))
 
 
 (defn -main [& args]
