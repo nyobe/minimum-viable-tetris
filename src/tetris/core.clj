@@ -254,8 +254,17 @@
   (or (move-piece state [1 0])
       (fuse-piece state)))
 
+(defn score-based-interval [state]
+  (let [c (chan)]
+    (go (while (>! c :tick)
+          (let [{:keys [score]} @state]
+            (<! (timeout
+                  ;; Increment speed every 10 lines
+                  (Math/abs (- 1000 (* 100 (quot score 10)))))))))
+    c))
+
 (defn game-loop [frame state]
-  (let [tick-chan (interval 1000)
+  (let [tick-chan (score-based-interval state)
         move-chan (attach-key-listener!
                     frame {KeyEvent/VK_LEFT [0 -1]
                            KeyEvent/VK_RIGHT [0 1]})
