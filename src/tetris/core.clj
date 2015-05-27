@@ -216,6 +216,10 @@
     (when (can-move? board piece pos)
       (assoc state :pos next-pos))))
 
+(defn maybe-move-piece [state offset]
+  (or (move-piece state offset)
+      state))
+
 (defn drop-piece [{:keys [board piece pos] :as state}]
   (let [downward (for [down (range)]
                    (move-piece state [down 0]))]
@@ -226,6 +230,14 @@
     (when (can-move? board rotated pos)
       (assoc state :piece rotated))))
 
+(defn maybe-rotate-piece [state]
+  (or (rotate-piece state)
+      state))
+
+(defn tick-piece [state]
+  (or (move-piece state [1 0])
+      (fuse-piece state)))
+
 (defn game-loop [frame state]
   (let [tick-chan (interval 1000)
         move-chan (attach-key-listener!
@@ -235,28 +247,27 @@
                     frame {KeyEvent/VK_UP :rotate})
         drop-chan (attach-key-listener!
                     frame {KeyEvent/VK_DOWN :drop})]
-    (go-loop [{:keys [board piece pos]} @state]
-             (.repaint frame)
-             (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan] :priority true)]
-               (recur
-                 (reset! state
-                   (or (condp = ch
-                         move-chan (move-piece @state value)
-                         rot-chan  (rotate-piece @state)
-                         drop-chan (drop-piece @state)
-                         tick-chan (or (move-piece @state [1 0])
-                                       (fuse-piece @state)))
-                       @state)))))))
+    (go (while true
+      (let [{:keys [board piece pos]} @state]
+        (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan]
+                                :priority true)]
+          (condp = ch
+            tick-chan (send state tick-piece)
+            move-chan (send state maybe-move-piece value)
+            rot-chan  (send state maybe-rotate-piece)
+            drop-chan (send state drop-piece))))))))
 
 (defn new-game []
-  (let [state (atom (spawn-piece (initial-state)))
+  (let [state (agent (spawn-piece (initial-state)))
         frame (main-window!)
         panel (board-panel state)]
+    (add-watch state :redraw (fn [& _] (.repaint panel)))
     (doto frame
       (.add panel)
       (.pack)
       (.setVisible true))
-    (game-loop frame state)))
+    (game-loop frame state)
+    state))
 
 (defn -main [& args]
   (new-game))
