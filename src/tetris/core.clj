@@ -285,8 +285,8 @@
     running-ch))
 
 (defn new-game []
-  (let [state (agent (spawn-piece (initial-state)))
-        frame (JFrame. "Tetris!")
+  (let [state (robust-agent (spawn-piece (initial-state)))
+        frame (JFrame. "MVTetris!")
         panel (board-panel state)
         game (game-loop frame state)]
     (add-watch state :redraw (fn [& _] (.repaint panel)))
