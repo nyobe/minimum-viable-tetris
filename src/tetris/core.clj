@@ -1,5 +1,5 @@
 (ns tetris.core
-  (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alts! alts!! timeout close!]])
+  (:require [clojure.core.async :as async :refer [go go-loop chan <! <!! >! >!! alt! alt!! alts! alts!! timeout close!]])
   (:import [java.awt Dimension Color]
            [javax.swing JPanel JFrame] ;; swing is double buffered!
            [java.awt.event KeyEvent KeyAdapter WindowAdapter]))
@@ -119,15 +119,6 @@
 
 (def square-size 20)
 
-(defn main-window! []
-  (doto (JFrame. "Tetris!")
-    ;; Let this window actually close X_X
-    (.addWindowListener
-      (proxy
-        [WindowAdapter] []
-        (windowClosing [e]
-          (.dispose (.getSource e)))))))
-
 (defn draw-square! [gfx color size [x y]]
   (let [arc (/ size 3)]
     (doto gfx
@@ -162,6 +153,12 @@
 (defn poll! [c]
   "read from channel without blocking"
   (first (alts!! [c] :default nil)))
+
+(defn open? [ch]
+  "return true while ch remains open"
+  (alt!!
+    ch false
+    :default true))
 
 (defn interval [msecs]
   "channel that ticks every msecs ms"
@@ -229,7 +226,7 @@
 (defn move-piece [{:keys [board piece pos] :as state}
                   offset]
   (let [next-pos (map + pos offset)]
-    (when (can-move? board piece pos)
+    (when (can-move? board piece next-pos)
       (assoc state :pos next-pos))))
 
 (defn maybe-move-piece [state offset]
@@ -250,7 +247,7 @@
   (or (rotate-piece state)
       state))
 
-(defn tick-piece [state]
+(defn fall-piece [state]
   (or (move-piece state [1 0])
       (fuse-piece state)))
 
@@ -263,8 +260,10 @@
                   (Math/abs (- 1000 (* 100 (quot score 10)))))))))
     c))
 
+
 (defn game-loop [frame state]
-  (let [tick-chan (score-based-interval state)
+  (let [running-ch (chan)
+        fall-chan (score-based-interval state)
         move-chan (attach-key-listener!
                     frame {KeyEvent/VK_LEFT [0 -1]
                            KeyEvent/VK_RIGHT [0 1]})
@@ -272,26 +271,33 @@
                     frame {KeyEvent/VK_UP :rotate})
         drop-chan (attach-key-listener!
                     frame {KeyEvent/VK_DOWN :drop})]
-    (go (while true
-      (let [{:keys [board piece pos]} @state]
-        (let [[value ch] (alts! [tick-chan move-chan rot-chan drop-chan]
-                                :priority true)]
-          (condp = ch
-            tick-chan (send state tick-piece)
-            move-chan (send state maybe-move-piece value)
-            rot-chan  (send state maybe-rotate-piece)
-            drop-chan (send state drop-piece))))))))
+
+    (go (while (open? running-ch)
+          (let [[value ch] (alts! [fall-chan move-chan rot-chan drop-chan]
+                                  :priority true)]
+            (condp = ch
+              fall-chan (send state fall-piece)
+              move-chan (send state maybe-move-piece value)
+              rot-chan  (send state maybe-rotate-piece)
+              drop-chan (send state drop-piece)))))
+    running-ch))
 
 (defn new-game []
   (let [state (agent (spawn-piece (initial-state)))
-        frame (main-window!)
-        panel (board-panel state)]
+        frame (JFrame. "Tetris!")
+        panel (board-panel state)
+        game (game-loop frame state)]
     (add-watch state :redraw (fn [& _] (.repaint panel)))
     (doto frame
       (.add panel)
       (.pack)
       (.setVisible true))
-    (game-loop frame state)
+    (.addWindowListener frame
+      (proxy
+        [WindowAdapter] []
+        (windowClosing [e]
+          (.dispose (.getSource e))
+          (close! game))))
     state))
 
 (defn -main [& args]
