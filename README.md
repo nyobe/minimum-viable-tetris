@@ -1,14 +1,18 @@
-# tetris
+# Minimum Viable Tetris
 
-A Clojure library designed to ... well, that part is up to you.
+Small project to become more familiar with Clojure
+
+![Game Over](./doc/screenshot.png)
 
 ## Usage
 
-FIXME
+- Up - Rotate clockwise
+- Down - Hard drop
+- Left/Right - Move piece
 
 ## License
 
-Copyright © 2015 FIXME
+Copyright © 2015
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
