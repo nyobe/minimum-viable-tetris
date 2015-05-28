@@ -138,10 +138,12 @@
 (defn board-panel [state]
   (proxy [JPanel] []
     (paintComponent [g]
-      (let [{:keys [board piece pos score]} @state]
+      (let [{:keys [board piece pos score game-over]} @state]
         (proxy-super paintComponent g)
         (draw-board! g (mask-m board piece pos))
-        (.drawString g (str "score: " score) 10 10)))
+        (.drawString g (str "score: " score) 10 10)
+        (when game-over
+          (.drawString g (str "GAME OVER") 10 20))))
     (getPreferredSize []
       (let [{:keys [board]} @state]
         (Dimension. (* (mat-width board) square-size)
@@ -191,10 +193,11 @@
 ;; Game state
 
 (defn initial-state []
-  {:board (empty-board 10 10)
-   :piece nil
-   :pos [0 0]
-   :score 0})
+  {:board (empty-board 22 10) ;; top two should be hidden
+     :piece nil
+     :pos [0 0]
+     :score 0
+     :game-over false})
 
 (defn spawn-piece [{:keys [board] :as state}]
   (let [next-piece (rand-nth pieces)
@@ -202,7 +205,8 @@
                         (quot (mat-width next-piece) 2))]]
     (assoc state
            :piece next-piece
-           :pos start-pos)))
+           :pos start-pos
+           :game-over (not (can-move? board next-piece start-pos)))))
 
 (defn clear-lines [{:keys [board score] :as state}]
   ;; check each row to see if its filled
@@ -259,7 +263,6 @@
                   ;; Increment speed every 10 lines
                   (Math/abs (- 1000 (* 100 (quot score 10)))))))))
     c))
-
 
 (defn game-loop [frame state]
   (let [running-ch (chan)
