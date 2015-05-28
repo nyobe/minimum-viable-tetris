@@ -192,6 +192,13 @@
 
 ;; Game state
 
+(defn robust-agent [initial]
+  "agent that ignores nil transitions"
+  (let [a (agent initial)]
+    (set-validator! a #(some? %))
+    (set-error-mode! a :continue)
+    a))
+
 (defn initial-state []
   {:board (empty-board 22 10) ;; top two should be hidden
      :piece nil
@@ -233,10 +240,6 @@
     (when (can-move? board piece next-pos)
       (assoc state :pos next-pos))))
 
-(defn maybe-move-piece [state offset]
-  (or (move-piece state offset)
-      state))
-
 (defn drop-piece [{:keys [board piece pos] :as state}]
   (let [downward (for [down (range)]
                    (move-piece state [down 0]))]
@@ -246,10 +249,6 @@
   (let [rotated (rotate-cw piece)]
     (when (can-move? board rotated pos)
       (assoc state :piece rotated))))
-
-(defn maybe-rotate-piece [state]
-  (or (rotate-piece state)
-      state))
 
 (defn fall-piece [state]
   (or (move-piece state [1 0])
@@ -276,13 +275,13 @@
                     frame {KeyEvent/VK_DOWN :drop})]
 
     (go (while (open? running-ch)
-          (let [[value ch] (alts! [fall-chan move-chan rot-chan drop-chan]
-                                  :priority true)]
-            (condp = ch
-              fall-chan (send state fall-piece)
-              move-chan (send state maybe-move-piece value)
-              rot-chan  (send state maybe-rotate-piece)
-              drop-chan (send state drop-piece)))))
+      (let [[value ch] (alts! [fall-chan move-chan rot-chan drop-chan]
+                                :priority true)]
+        (condp = ch
+          fall-chan (send state fall-piece)
+          move-chan (send state move-piece value)
+          rot-chan  (send state rotate-piece)
+          drop-chan (send state drop-piece)))))
     running-ch))
 
 (defn new-game []
