@@ -169,12 +169,6 @@
           (<! (timeout msecs))))
     c))
 
-(defn do-repeatedly [f]
-  (let [running? (interval 250)]
-    (go (while (<! running?)
-          (f)))
-    running?))
-
 
 ;; Input
 
